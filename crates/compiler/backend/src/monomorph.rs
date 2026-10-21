@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 use std::cell::Cell;
-use std::hash::{BuildHasher, Hash};
+use std::hash::Hash;
 use std::{fmt, mem, ops};
 
 use hashbrown::HashMap;
@@ -405,12 +405,13 @@ impl<'ctx> Monomorphizer<'ctx> {
             source_idx
         } else {
             let index = 0xCAFE_BABE + self.files.len() as u32;
-            let path_hash = self.functions.map.hasher().hash_one(file.path());
-            let lower_hash = path_hash as u32;
-            let upper_hash = (path_hash >> 32) as u32;
+            // Derived from the inputs only, so that identical sources compile to identical
+            // bundles: FNV-1a 32 of the stored path, and the CRC32 of the source text.
+            let path = file.path().to_string_lossy();
+            let path_hash = fnv1a32(path.as_bytes());
+            let code_crc = crc32fast::hash(file.source().as_bytes());
 
-            let file =
-                SourceFile::new(index, lower_hash, upper_hash, file.path().to_string_lossy());
+            let file = SourceFile::new(index, path_hash, code_crc, path);
             let source_idx = bundle.define(file);
             self.files.insert(span.file, source_idx);
             source_idx
@@ -1120,6 +1121,12 @@ impl fmt::Display for MangledConstant<'_, '_> {
             ir::Const::Bool(val) => write!(f, "{val}"),
         }
     }
+}
+
+fn fnv1a32(bytes: &[u8]) -> u32 {
+    bytes.iter().fold(0x811c_9dc5, |hash, &byte| {
+        (hash ^ u32::from(byte)).wrapping_mul(0x0100_0193)
+    })
 }
 
 #[cfg(test)]

@@ -1012,6 +1012,7 @@ version = "1.0.0-preview.22"
 dependencies = [
  "bitfield-struct",
  "bon",
+ "crc32fast",
  "hashbrown 0.17.0",
  "identity-hash",
  "indexmap",
