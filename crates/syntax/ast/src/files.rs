@@ -33,8 +33,11 @@ impl SourceMap {
         use std::ffi::OsStr;
 
         let it = it.into_iter().flat_map(|path| {
+            // Sorted by name, so that the order files are read in does not depend on the
+            // filesystem, and compiles agree between machines and with the game's.
             ignore::WalkBuilder::new(path.into())
                 .follow_links(true)
+                .sort_by_file_name(OsStr::cmp)
                 .build()
                 .filter_map(Result::ok)
                 .filter(|entry| entry.path().extension() == Some(OsStr::new("reds")))
@@ -216,5 +219,31 @@ impl<A> Default for StableDeque<A> {
             front: FrozenVec::default(),
             back: FrozenVec::default(),
         }
+    }
+}
+
+#[cfg(all(test, feature = "ignore"))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn paths_are_read_in_name_order() {
+        let root = std::env::temp_dir().join(format!("redscript-files-{}", std::process::id()));
+        fs::create_dir_all(root.join("d")).unwrap();
+        // Created out of name order, so that the directory listing is unsorted both on
+        // filesystems that list in creation order and on those that list newest first.
+        for name in ["b.reds", "d/y.reds", "a.reds", "c.reds"] {
+            fs::write(root.join(name), "").unwrap();
+        }
+
+        let sources = SourceMap::from_paths_recursively([&root]);
+        fs::remove_dir_all(&root).unwrap();
+        let names = sources
+            .unwrap()
+            .files()
+            .map(|(_, file)| file.path().strip_prefix(&root).unwrap().to_owned())
+            .collect::<Vec<_>>();
+        let expected = ["a.reds", "b.reds", "c.reds", "d/y.reds"].map(PathBuf::from);
+        assert_eq!(names, expected);
     }
 }
