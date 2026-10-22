@@ -120,7 +120,8 @@ impl<'scope, 'ctx> NameResolution<'scope, 'ctx> {
                     self.reporter.unwrap_err(res);
 
                     // we initialize and add a stub to enable the compiler to automatically
-                    // resolve the ref type whenever the type is used
+                    // resolve the ref type whenever the type is used; it carries the span
+                    // so that annotations in files read before this one see a user-defined type
                     let mut flags = AggregateFlags::new();
                     item_meta
                         .annotations
@@ -137,6 +138,7 @@ impl<'scope, 'ctx> NameResolution<'scope, 'ctx> {
                         });
                     let mut stub = Aggregate::default();
                     stub.set_flags(flags);
+                    stub.set_span(name_span);
                     let schema = TypeSchema::Aggregate(stub.into());
                     self.symbols.add_type(cls_id, TypeDef::new([], schema, []));
 
@@ -743,6 +745,7 @@ impl<'scope, 'ctx> NameResolution<'scope, 'ctx> {
                 if agg.is_user_defined() {
                     self.reporter
                         .report(Diagnostic::UserSymbolAnnotation(name_span));
+                    return None;
                 }
                 let qs = meta.qualifiers;
                 let visibility = meta
@@ -880,6 +883,7 @@ impl<'scope, 'ctx> NameResolution<'scope, 'ctx> {
                     if agg.is_user_defined() {
                         self.reporter
                             .report(Diagnostic::UserSymbolAnnotation(name_span));
+                        return None;
                     }
 
                     if flags.is_fully_defined() {
@@ -1421,6 +1425,16 @@ impl<'scope, 'ctx> NameResolution<'scope, 'ctx> {
         annotation: &FunctionAnnotation<'ctx>,
         types: &TypeEnv<'_, 'ctx>,
     ) -> Option<MethodId<'ctx>> {
+        // A class of ours may still be a stub here, without its methods, if its file is read
+        // after this one; reject it before looking the method up, whatever the file order.
+        if let Some(&TypeRef::Id(id)) = types.get(cls_name)
+            && let TypeSchema::Aggregate(agg) = self.symbols[id].schema()
+            && agg.is_user_defined()
+        {
+            self.reporter
+                .report(Diagnostic::UserSymbolAnnotation(cls_span));
+            return None;
+        }
         let res =
             match self.resolve_annotated_method(func_name, cls_name, func_type, types, cls_span) {
                 Some(res) => Some(res),

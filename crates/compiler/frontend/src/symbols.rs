@@ -472,6 +472,10 @@ impl<'ctx> Aggregate<'ctx> {
         self.flags = flags;
     }
 
+    pub fn set_span(&mut self, span: Span) {
+        self.span = Some(span);
+    }
+
     #[inline]
     pub fn base(&self) -> Option<&TypeApp<'ctx>> {
         self.base.as_ref()
