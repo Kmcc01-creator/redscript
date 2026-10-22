@@ -1,0 +1,10 @@
+---
+source: crates/compiler/frontend/tests/errors.rs
+expression: "DisplayDiagnostics(reporter.into_reported(), &sources)"
+input_file: crates/compiler/frontend/tests/data/script-ref-weak.reds
+---
+[TYPE_ERR] At tests/data/script-ref-weak.reds:13:16
+  TakeWeakBase(weakDerived); // Error
+               ^^^^^^^^^^^
+type mismatch: found `Base` when expected `Derived`
+  when comparing `wref<Base>` and `wref<Derived>`

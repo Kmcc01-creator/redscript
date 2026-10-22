@@ -1,0 +1,29 @@
+---
+source: crates/compiler/backend/tests/bytecode.rs
+expression: "BytecodePrinter::new(&bundle, bundle_len)"
+input_file: crates/compiler/backend/tests/data/script-ref-weak.reds
+---
+// ReadWeak;wref<Node> (f0)
+return
+deref 0
+param 0
+
+// WriteWeak;wref<Node>Node (f1)
+assign
+param 1
+as_ref 0
+param 2
+
+// PassWeak; (f2)
+assign
+local 0
+object.new 0
+assign
+local 1
+ref.to_wref
+local 0
+invoke.static j43 l14 f1 0000000000000000
+as_ref 0
+local 1
+local 1
+param.end

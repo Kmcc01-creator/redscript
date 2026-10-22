@@ -2164,11 +2164,20 @@ impl<'scope, 'ctx> Lower<'scope, 'ctx> {
             }
             None => return Ok(()),
         };
+        // `AsRef<A>` infers `A` from its argument, which would first turn a `wref<C>` value into a
+        // `C` temporary and refer to that. A value that is itself a ref is wrapped as the pointee.
+        let type_args = match name {
+            ir::Intrinsic::AsRef if lhs.strip_ref(self.symbols).is_some() => {
+                rhs.unwrap_ref(self.symbols).into_iter().collect()
+            }
+            _ => vec![],
+        };
         let arg = mem::replace(expr, ir::Expr::null(span));
         let (call, _) = self
             .free_function_call_builder()
             .name(name)
             .args([(arg, lhs)])
+            .type_args(&type_args)
             .env(env)
             .span(span)
             .build()?;
