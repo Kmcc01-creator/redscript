@@ -13,9 +13,9 @@ use crate::diagnostic::pass::DiagnosticPass;
 use crate::lower::{Env, Lower};
 use crate::symbols::FreeFunctionIndexes;
 use crate::{
-    CompileErrorReporter, FieldId, FieldIndex, FreeFunction, FreeFunctionIndex, FunctionIndex,
-    FunctionType, IndexMap, IndexSet, MethodId, PolyType, Symbols, Type, TypeId, TypeRef,
-    TypeScope, ir,
+    CompileErrorReporter, Diagnostic, FieldId, FieldIndex, FreeFunction, FreeFunctionIndex,
+    FunctionIndex, FunctionType, IndexMap, IndexSet, MethodId, PolyType, Symbols, Type, TypeId,
+    TypeRef, TypeScope, ir,
 };
 
 #[derive(Debug)]
@@ -127,7 +127,14 @@ impl<'scope, 'ctx> TypeInference<'scope, 'ctx> {
                             .reporter(reporter)
                             .span(func.span)
                             .build();
-                        compiled.method_replacements.insert(func.id, lowered);
+                        // A later replacement of the same method overwrites an earlier one.
+                        if compiled
+                            .method_replacements
+                            .insert(func.id, lowered)
+                            .is_some()
+                        {
+                            reporter.report(Diagnostic::ReplaceMethodConflict(func.name_span));
+                        }
                     }
                     FuncItemKind::AddMethod(func) => {
                         let lowered = func.body.as_ref().map(|body| {

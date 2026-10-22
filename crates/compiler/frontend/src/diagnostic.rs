@@ -101,6 +101,10 @@ pub enum Diagnostic<'ctx> {
         "this `@addField` conflicts with an existing field, this operation will have no effect"
     )]
     AddFieldConflict(Span),
+    #[error(
+        "this `@replaceMethod` targets a method that is already replaced, only this replacement will take effect"
+    )]
+    ReplaceMethodConflict(Span),
     #[error("structures cannot have variance annotations")]
     InvalidStructVariance(Span),
     #[error("method overrides cannot be less visibile than the method they override ({0})")]
@@ -119,7 +123,8 @@ impl<'ctx> Diagnostic<'ctx> {
             Self::UnusedItemQualifiers(_, _)
             | Self::DuplicateVariantName(_)
             | Self::UnusedLocal(_)
-            | Self::AddFieldConflict(_) => DiagnosticLevel::Warning,
+            | Self::AddFieldConflict(_)
+            | Self::ReplaceMethodConflict(_) => DiagnosticLevel::Warning,
             Self::ImportIsPrivate(_, _) | Self::LessVisibleOverride(_, _) => {
                 DiagnosticLevel::ErrorAllowedAtRuntime
             }
@@ -179,6 +184,7 @@ impl<'ctx> Diagnostic<'ctx> {
             | Self::DuplicateImpl(span)
             | Self::UnusedLocal(span)
             | Self::AddFieldConflict(span)
+            | Self::ReplaceMethodConflict(span)
             | Self::InvalidStructVariance(span)
             | Self::LessVisibleOverride(_, span)
             | Self::Other(_, _, span) => *span,
@@ -229,6 +235,7 @@ impl<'ctx> Diagnostic<'ctx> {
             Self::DuplicateImpl(_) => "DUP_IMPL",
             Self::UnusedLocal(_) => "UNUSED_LOCAL",
             Self::AddFieldConflict(_) => "ADD_FIELD_CONFLICT",
+            Self::ReplaceMethodConflict(_) => "REPLACE_METHOD_CONFLICT",
             Self::InvalidStructVariance(_) => "INVALID_STRUCT_VARIANCE",
             Self::LessVisibleOverride(_, _) => "LESS_VISIBLE_OVERRIDE",
             Self::Other(_, _, _) => "OTHER",
