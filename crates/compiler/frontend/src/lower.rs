@@ -1469,6 +1469,7 @@ impl<'scope, 'ctx> Lower<'scope, 'ctx> {
         };
 
         let (ir, typ) = self.lower_expr(receiver, env)?;
+        let (ir, typ) = self.deref_script_receiver(ir, typ, env, receiver_span)?;
         let (ref_type, unref_t) = typ.strip_ref(self.symbols).unzip();
         let upper_bound = unref_t
             .unwrap_or(typ)
@@ -1747,7 +1748,7 @@ impl<'scope, 'ctx> Lower<'scope, 'ctx> {
         }
 
         let (mut ir, typ) = self.lower_expr(receiver, env)?;
-        let (ref_type, unref_t) = typ.strip_ref(self.symbols).unzip();
+        let unref_t = typ.unwrap_ref(self.symbols);
         let upper_bound = unref_t
             .unwrap_or(typ.clone())
             .force_upper_bound(self.symbols)
@@ -1772,6 +1773,8 @@ impl<'scope, 'ctx> Lower<'scope, 'ctx> {
             .filter(|entry| !entry.func().flags().is_static())
             .peekable();
         if candidates.peek().is_none() {
+            let (ir, typ) = self.deref_script_receiver(ir, typ, env, *expr_span)?;
+            let ref_type = typ.strip_ref(self.symbols).map(|(rt, _)| rt);
             let (field_expr, field_t, _) = self
                 .field_access_builder()
                 .receiver(ir)
@@ -1820,6 +1823,8 @@ impl<'scope, 'ctx> Lower<'scope, 'ctx> {
                 .map_args(|args| iter::once(ir).chain(args).collect())
                 .into_static_call(upper_bound.id(), upper_bound.args().iter().cloned())
         } else {
+            let (ir, typ) = self.deref_script_receiver(ir, typ, env, *expr_span)?;
+            let ref_type = typ.strip_ref(self.symbols).map(|(rt, _)| rt);
             resolved.into_instance_call(ir, upper_bound, ref_type, mode)
         };
 
@@ -2208,6 +2213,31 @@ impl<'scope, 'ctx> Lower<'scope, 'ctx> {
             .with_args(args)
             .into_call();
         Ok(res)
+    }
+
+    /// Wraps a `script_ref` receiver in `Deref`, so that a member is reached through the
+    /// reference rather than in the reference's own storage. Other receivers are returned as is.
+    fn deref_script_receiver(
+        &mut self,
+        receiver: ir::Expr<'ctx>,
+        receiver_t: PolyType<'ctx>,
+        env: &Env<'_, 'ctx>,
+        span: Span,
+    ) -> LowerResult<'ctx, (ir::Expr<'ctx>, PolyType<'ctx>)> {
+        if !matches!(
+            receiver_t.strip_ref(self.symbols),
+            Some((RefType::Script, _))
+        ) {
+            return Ok((receiver, receiver_t));
+        }
+        let (call, call_t) = self
+            .free_function_call_builder()
+            .name(ir::Intrinsic::Deref)
+            .args([(receiver, receiver_t)])
+            .env(env)
+            .span(span)
+            .build()?;
+        Ok((ir::Expr::call(call, span), call_t))
     }
 
     #[builder(finish_fn = build)]

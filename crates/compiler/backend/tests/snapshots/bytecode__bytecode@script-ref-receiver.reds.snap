@@ -1,0 +1,38 @@
+---
+source: crates/compiler/backend/tests/bytecode.rs
+expression: "BytecodePrinter::new(&bundle, bundle_len)"
+input_file: crates/compiler/backend/tests/data/script-ref-receiver.reds
+---
+// Node::Id; (f0)
+return
+ctx 10
+this
+object.field 0
+
+// StructRead;Vec (f1)
+return
+struct.field 1
+deref 0
+param 0
+
+// StructWrite;VecFloat (f2)
+assign
+struct.field 1
+deref 0
+param 1
+param 2
+
+// ClassRead;Node (f3)
+return
+ctx 27
+deref 1
+param 3
+object.field 0
+
+// ClassCall;Node (f4)
+return
+ctx 34
+deref 1
+param 4
+invoke.static j16 l26 f0 0000000000000000
+param.end
