@@ -493,6 +493,9 @@ impl<'ctx> Monomorphizer<'ctx> {
             let parent_t = MonoType::nullary(id.parent());
             let index = self.classes[&parent_t].methods()[&id.index()];
             self.function_body(index, func, &env, symbols, bundle)?;
+            // The method now holds the replacement's body, so it records the replacement's source.
+            let source = self.source_ref(func.span, bundle);
+            bundle[index].set_source(Some(source));
         }
         Ok(())
     }
@@ -530,12 +533,12 @@ impl<'ctx> Monomorphizer<'ctx> {
                     .with_is_quest(wrapped.flags().is_quest())
                     .with_is_callback(wrapped.flags().is_callback() && i == 0);
 
-                let source = func.block.span().map(|span| self.source_ref(span, bundle));
+                // Its source is set when it is given a body: the next wrap's, or after the last,
+                // the wrapped method's own.
                 let def = PoolFunction::new(cname, wrapped.visibility(), flags)
                     .with_class(wrapped.class())
                     .with_base_method(wrapped.base_method().filter(|_| i == 0))
-                    .with_return_type(wrapped.return_type())
-                    .with_source(source);
+                    .with_return_type(wrapped.return_type());
                 let next = bundle.define_and_init(def, |bundle, next, def| {
                     let parameters = wrapped
                         .parameters()
@@ -548,6 +551,9 @@ impl<'ctx> Monomorphizer<'ctx> {
 
                 self.classes[&parent_t].set_alias(id.index(), next);
                 self.function_body(index, func, &env, symbols, bundle)?;
+                // The function at `index` holds this wrap's body, so it records this wrap's source.
+                let source = self.source_ref(func.span, bundle);
+                bundle[index].set_source(Some(source));
 
                 index = next;
             }

@@ -824,6 +824,15 @@ impl<'i> Function<'i> {
         self.set_body(FunctionBody::Code(code));
     }
 
+    /// Sets the `source` of this object.
+    pub fn set_source(&mut self, source: Option<SourceReference>) {
+        assert!(
+            !self.flags.is_native() || source.is_none(),
+            "should not set source for a native function"
+        );
+        self.source = source;
+    }
+
     /// Converts this definition into an owned version.
     pub fn into_owned(self) -> Function<'static> {
         debug_assert_eq!(self.flags().has_base_method(), self.base_method.is_some());
