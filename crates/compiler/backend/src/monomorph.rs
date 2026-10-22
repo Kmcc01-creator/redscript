@@ -515,7 +515,13 @@ impl<'ctx> Monomorphizer<'ctx> {
             let wrapped_name = wrapped.name();
 
             for (i, func) in funcs.iter().rev().enumerate() {
-                let name = format!("{}$wrapper{i}", bundle[wrapped_name]);
+                // The suffix goes before the signature: the game takes a function's short name
+                // from the part of its full name before the `;`, and a layer whose short name
+                // repeats the method's is found by a lookup of that name (CET's picks among them).
+                let name = match bundle[wrapped_name].split_once(';') {
+                    Some((short, signature)) => format!("{short}$wrapper{i};{signature}"),
+                    None => format!("{}$wrapper{i}", bundle[wrapped_name]),
+                };
                 let cname = bundle.cnames_mut().add(name);
                 let flags = PoolFunctionFlags::default()
                     .with_is_static(wrapped.flags().is_static())
