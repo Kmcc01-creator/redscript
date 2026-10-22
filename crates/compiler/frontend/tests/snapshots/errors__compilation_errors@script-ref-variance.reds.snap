@@ -1,0 +1,14 @@
+---
+source: crates/compiler/frontend/tests/errors.rs
+expression: "DisplayDiagnostics(reporter.into_reported(), &sources)"
+input_file: crates/compiler/frontend/tests/data/script-ref-variance.reds
+---
+[TYPE_ERR] At tests/data/script-ref-variance.reds:21:12
+  TakeBase(derived); // Error
+           ^^^^^^^
+type mismatch: found `Base` when expected `Derived`
+
+[TYPE_ERR] At tests/data/script-ref-variance.reds:23:17
+  TakeConstBase(derived); // Error
+                ^^^^^^^
+type mismatch: found `Base` when expected `Derived`

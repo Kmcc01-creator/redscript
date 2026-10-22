@@ -426,6 +426,13 @@ impl<'ctx> PolyType<'ctx> {
                 pointee.constrain::<AnyBaseType>(other, symbols)?;
                 Ok(Some(Coercion::FromRef(from)))
             }
+            // A callee can write through a script_ref, so a class pointee must match exactly:
+            // a `Derived` passed as `script_ref<Base>` could be left holding a `Base`. Struct
+            // pointees stay covariant, since a base struct's fields come first in a subtype.
+            (None, Some((RefType::Script, pointee))) if pointee.is_class(symbols) => {
+                self.constrain_invariant(&pointee, symbols)?;
+                Ok(Some(Coercion::IntoRef(RefType::Script)))
+            }
             (None, Some((to, pointee))) => {
                 self.constrain::<AnyBaseType>(&pointee, symbols)?;
                 Ok(Some(Coercion::IntoRef(to)))
@@ -440,6 +447,15 @@ impl<'ctx> PolyType<'ctx> {
                 Ok(None)
             }
         }
+    }
+
+    /// Whether this is a class type, possibly behind a `ref` or `wref`, as opposed to a struct or
+    /// a primitive.
+    fn is_class(&self, symbols: &Symbols<'ctx>) -> bool {
+        self.unwrap_ref_or_self(symbols)
+            .upper_bound(symbols)
+            .and_then(|app| symbols[app.id()].schema().as_aggregate())
+            .is_some_and(|agg| !agg.flags().is_struct())
     }
 
     #[inline]
