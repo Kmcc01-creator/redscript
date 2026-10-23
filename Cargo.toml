@@ -72,8 +72,8 @@ similar-asserts = "2"
 insta = { version = "1", features = ["glob"] }
 
 [workspace.dependencies.byte]
-git = "https://github.com/jac3km4/byte"
-rev = "da71833"
+git = "https://github.com/Kmcc01-creator/byte"
+rev = "20f967f"
 features = ["alloc", "derive"]
 
 [workspace.dependencies.sequence_trie]

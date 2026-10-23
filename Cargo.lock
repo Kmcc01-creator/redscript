@@ -181,7 +181,7 @@ checksum = "5d20789868f4b01b2f2caec9f5c4e0213b41e3e5702a50157d699ae31ced2fcb"
 [[package]]
 name = "byte"
 version = "0.2.7"
-source = "git+https://github.com/jac3km4/byte?rev=da71833#da71833efec765732f5d08dec6b78a0c7d1de82c"
+source = "git+https://github.com/Kmcc01-creator/byte?rev=20f967f#20f967f2c71d6bff1da0c81d3c26ba64f7b64427"
 dependencies = [
  "byte_derive",
 ]
@@ -189,7 +189,7 @@ dependencies = [
 [[package]]
 name = "byte_derive"
 version = "0.2.7"
-source = "git+https://github.com/jac3km4/byte?rev=da71833#da71833efec765732f5d08dec6b78a0c7d1de82c"
+source = "git+https://github.com/Kmcc01-creator/byte?rev=20f967f#20f967f2c71d6bff1da0c81d3c26ba64f7b64427"
 dependencies = [
  "proc-macro2",
  "quote",
