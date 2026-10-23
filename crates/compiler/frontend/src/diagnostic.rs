@@ -66,6 +66,8 @@ pub enum Diagnostic<'ctx> {
     UnsastisfiedBound(Box<Type<'ctx>>, Box<Type<'ctx>>, Span),
     #[error("this annotation attempts to modify a user-defined symbol, which is not allowed")]
     UserSymbolAnnotation(Span),
+    #[error("annotations on native methods are not allowed: the game never runs their script code")]
+    NativeMethodAnnotation(Span),
     #[error("the type `{0}` appears in {1} position, which is incompatible with its declaration")]
     InvalidVariance(&'ctx str, Variance, Span),
     #[error("this type cannot inherit from {0}")]
@@ -168,6 +170,7 @@ impl<'ctx> Diagnostic<'ctx> {
             | Self::InvalidTypeArgCount(_, _, span)
             | Self::UnsastisfiedBound(_, _, span)
             | Self::UserSymbolAnnotation(span)
+            | Self::NativeMethodAnnotation(span)
             | Self::InvalidVariance(_, _, span)
             | Self::IncompatibleBaseType(_, span)
             | Self::DuplicateMethodAnnotation(span)
@@ -211,6 +214,7 @@ impl<'ctx> Diagnostic<'ctx> {
             | Self::AnnotatedMethodNotFound(_, _)
             | Self::IncompatibleAnnotations(_)
             | Self::UserSymbolAnnotation(_)
+            | Self::NativeMethodAnnotation(_)
             | Self::GenericMethodAnnotation(_) => "INVALID_ANN_USE",
             Self::ImportNotFound(_, _) => "UNRESOLVED_IMPORT",
             Self::ImportIsPrivate(_, _) => "PRIVATE_IMPORT",

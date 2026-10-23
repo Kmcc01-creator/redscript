@@ -1465,6 +1465,14 @@ impl<'scope, 'ctx> NameResolution<'scope, 'ctx> {
                 .report(Diagnostic::UserSymbolAnnotation(cls_span));
             return None;
         }
+        // A native method keeps its native flag, so the game would never run a wrapper's or a
+        // replacement's code; 0.5.x rejects these too. Accepted, they reached monomorphization,
+        // which panics on giving a native function a source (fork defect 17).
+        if method.flags().is_native() {
+            self.reporter
+                .report(Diagnostic::NativeMethodAnnotation(func_span));
+            return None;
+        }
         Some(id)
     }
 
