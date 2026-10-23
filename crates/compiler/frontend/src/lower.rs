@@ -1207,43 +1207,28 @@ impl<'scope, 'ctx> Lower<'scope, 'ctx> {
             return Err(Error::InvalidDynCastType(*type_span));
         };
         let target = InferredTypeApp::from_type(&typ);
-        let Some(agg) = self.symbols[target.id()].schema().as_aggregate() else {
+        if self.symbols[target.id()].schema().as_aggregate().is_none() {
             return Err(Error::InvalidDynCastType(*type_span));
-        };
-        let expected = target.clone().into_type().into_poly();
-        let (ref_t, inner) = expr_t.strip_ref(self.symbols).unzip();
-
-        let constraint = inner.unwrap_or_else(|| expr_t.clone());
-        let result_t = match ref_t {
-            Some(RefType::Weak) => Type::app(predef::WREF, [expected.clone()]).into_poly(),
-            _ if agg.flags().is_mixed_ref() => {
-                Type::app(predef::REF, [expected.clone()]).into_poly()
-            }
-            _ => expected.clone(),
-        };
-        let inferred = expected
-            .constrain_base(&constraint, self.symbols)
-            .map(|_| result_t)
-            .map_err(|err| (err, constraint));
-
-        match inferred {
-            Err((err, inner)) => {
-                if inner.constrain_base(&expected, self.symbols).is_ok() {
-                    Err(Error::RedundantDynCast(span))
-                } else {
-                    Err(Error::ImpossibleDynCast(err.into(), span))
-                }
-            }
-            Ok(inferred) => {
-                let ir = ir::Expr::DynCast {
-                    expr: expr.into(),
-                    expr_type: expr_t.into(),
-                    target_type: target.into(),
-                    span,
-                };
-                Ok((ir, inferred))
-            }
         }
+        let expected = target.clone().into_type().into_poly();
+        let (expr, expr_t) = self.deref_script_receiver(expr, expr_t, env, span)?;
+
+        let constraint = expr_t.unwrap_ref_or_self(self.symbols);
+        if let Err(err) = expected.constrain_base(&constraint, self.symbols) {
+            return if constraint.constrain_base(&expected, self.symbols).is_ok() {
+                Err(Error::RedundantDynCast(span))
+            } else {
+                Err(Error::ImpossibleDynCast(err.into(), span))
+            };
+        }
+        self.dyn_cast_builder()
+            .expr(expr)
+            .expr_type(expr_t)
+            .target(target)
+            .target_type(expected)
+            .env(env)
+            .span(span)
+            .build()
     }
 
     fn lower_call(
@@ -2257,6 +2242,39 @@ impl<'scope, 'ctx> Lower<'scope, 'ctx> {
         Ok((ir::Expr::call(call, span), call_t))
     }
 
+    /// A dynamic cast of `expr` to the class `target`, whose type is `target_type`, and the type
+    /// of its result. A `script_ref` is dereferenced first, so that its target is cast rather than
+    /// the reference (fork defect 15). A weak reference stays weak, a mixed-ref class is cast to
+    /// `ref<T>`, and any other to `T`. `as` and the cast and destructuring patterns cast here.
+    #[builder(finish_fn = build)]
+    fn dyn_cast_builder(
+        &mut self,
+        expr: ir::Expr<'ctx>,
+        expr_type: PolyType<'ctx>,
+        target: InferredTypeApp<'ctx>,
+        target_type: PolyType<'ctx>,
+        env: &Env<'_, 'ctx>,
+        span: Span,
+    ) -> LowerResult<'ctx, (ir::Expr<'ctx>, PolyType<'ctx>)> {
+        let (expr, expr_t) = self.deref_script_receiver(expr, expr_type, env, span)?;
+        let is_mixed_ref = self.symbols[target.id()]
+            .schema()
+            .as_aggregate()
+            .is_some_and(|agg| agg.flags().is_mixed_ref());
+        let cast_t = match expr_t.strip_ref(self.symbols) {
+            Some((RefType::Weak, _)) => Type::app(predef::WREF, [target_type]).into_poly(),
+            _ if is_mixed_ref => Type::app(predef::REF, [target_type]).into_poly(),
+            _ => target_type,
+        };
+        let cast = ir::Expr::DynCast {
+            expr: expr.into(),
+            expr_type: expr_t.into(),
+            target_type: target.into(),
+            span,
+        };
+        Ok((cast, cast_t))
+    }
+
     #[builder(finish_fn = build)]
     fn field_access_builder(
         &mut self,
@@ -2310,22 +2328,15 @@ impl<'scope, 'ctx> Lower<'scope, 'ctx> {
             .constrain_base(&PolyType::nullary(predef::ISCRIPTABLE), self.symbols)
             .with_span(span)?;
 
-        let (expr, expr_t) = self.deref_script_receiver(expr, expr_type.clone(), env, span)?;
-        let is_mixed_ref = self.symbols[upper_bound.id()]
-            .schema()
-            .as_aggregate()
-            .is_some_and(|agg| agg.flags().is_mixed_ref());
-        let cast_t = match expr_t.strip_ref(self.symbols) {
-            Some((RefType::Weak, _)) => Type::app(predef::WREF, [target_type.clone()]).into_poly(),
-            _ if is_mixed_ref => Type::app(predef::REF, [target_type.clone()]).into_poly(),
-            _ => target_type.clone(),
-        };
-        let cast = ir::Expr::DynCast {
-            expr: expr.into(),
-            expr_type: expr_t.into(),
-            target_type: upper_bound.into(),
-            span,
-        };
+        let (cast, cast_t) = self
+            .dyn_cast_builder()
+            .expr(expr)
+            .expr_type(expr_type.clone())
+            .target(upper_bound)
+            .target_type(target_type.clone())
+            .env(env)
+            .span(span)
+            .build()?;
         let (call, _) = self
             .free_function_call_builder()
             .name(ir::Intrinsic::IsDefined)

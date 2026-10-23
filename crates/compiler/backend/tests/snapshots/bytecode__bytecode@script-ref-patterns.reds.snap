@@ -1,0 +1,25 @@
+---
+source: crates/compiler/backend/tests/bytecode.rs
+expression: "BytecodePrinter::new(&bundle, bundle_len)"
+input_file: crates/compiler/backend/tests/data/script-ref-patterns.reds
+---
+// AsCast;script_ref<Base> (f0)
+assign
+local 0
+ref.dyncast 0
+deref 0
+param 0
+return
+ref.to_bool
+local 0
+
+// WeakCast;script_ref<Base> (f1)
+assign
+local 1
+wref.dyncast 0
+deref 1
+param 1
+return
+ref.to_bool
+wref.to_ref
+local 1
