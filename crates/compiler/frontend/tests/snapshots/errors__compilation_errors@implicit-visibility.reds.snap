@@ -3,27 +3,27 @@ source: crates/compiler/frontend/tests/errors.rs
 expression: "DisplayDiagnostics(reporter.into_reported(), &sources)"
 input_file: crates/compiler/frontend/tests/data/implicit-visibility.reds
 ---
-[LESS_VISIBLE_OVERRIDE] At tests/data/implicit-visibility.reds:9:16
-  private func Public() {} // Error
-               ^^^^^^
-method overrides cannot be less visibile than the method they override (public)
+[MORE_VISIBLE_OVERRIDE] At tests/data/implicit-visibility.reds:18:18
+  protected func Private() {} // Error
+                 ^^^^^^^
+method overrides cannot be more visible than the method they override (private)
 
-[LESS_VISIBLE_OVERRIDE] At tests/data/implicit-visibility.reds:10:16
-  private func Protected() {} // Error
-               ^^^^^^^^^
-method overrides cannot be less visibile than the method they override (protected)
+[MORE_VISIBLE_OVERRIDE] At tests/data/implicit-visibility.reds:24:15
+  public func Protected() {} // Error
+              ^^^^^^^^^
+method overrides cannot be more visible than the method they override (protected)
 
-[LESS_VISIBLE_OVERRIDE] At tests/data/implicit-visibility.reds:15:18
-  protected func Public() {} // Error
-                 ^^^^^^
-method overrides cannot be less visibile than the method they override (public)
+[MORE_VISIBLE_OVERRIDE] At tests/data/implicit-visibility.reds:25:15
+  public func Private() {} // Error
+              ^^^^^^^
+method overrides cannot be more visible than the method they override (private)
 
-[INACCESSIBLE_METHOD] At tests/data/implicit-visibility.reds:36:3
+[INACCESSIBLE_METHOD] At tests/data/implicit-visibility.reds:37:3
   class.Protected(); // Error
   ^^^^^^^^^^^^^^^^^
 protected member `Protected` of `ChildWithImplicit` is not accessible here
 
-[INACCESSIBLE_METHOD] At tests/data/implicit-visibility.reds:37:3
+[INACCESSIBLE_METHOD] At tests/data/implicit-visibility.reds:38:3
   class.Private(); // Error
   ^^^^^^^^^^^^^^^
 private member `Private` of `ChildWithImplicit` is not accessible here

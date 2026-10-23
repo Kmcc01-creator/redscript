@@ -1277,10 +1277,12 @@ impl<'scope, 'ctx> NameResolution<'scope, 'ctx> {
                     method
                         .flags_mut()
                         .set_visibility(overriden_flags.visibility());
-                } else if method.flags().visibility() < overriden_flags.visibility()
+                } else if method.flags().visibility() > overriden_flags.visibility()
                     && let Some(span) = method.span()
                 {
-                    self.reporter.report(Diagnostic::LessVisibleOverride(
+                    // An override may narrow, as CDPR's scripts do 352 times (a private
+                    // `OnAttach` over the base's), but never widen, which they never do.
+                    self.reporter.report(Diagnostic::MoreVisibleOverride(
                         overriden_flags.visibility(),
                         span,
                     ));

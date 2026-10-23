@@ -1,4 +1,5 @@
 
+// Overrides may narrow, as the game's scripts do, but never widen.
 class Parent {
   public func Public() {}
   protected func Protected() {}
@@ -6,22 +7,22 @@ class Parent {
 }
 
 class ChildWithPrivate extends Parent {
-  private func Public() {} // Error
-  private func Protected() {} // Error
+  private func Public() {} // OK
+  private func Protected() {} // OK
   private func Private() {} // OK
 }
 
 class ChildWithProtected extends Parent {
-  protected func Public() {} // Error
+  protected func Public() {} // OK
   protected func Protected() {} // OK
-  protected func Private() {} // OK
+  protected func Private() {} // Error
 }
 
 
 class ChildWithPublic extends Parent {
   public func Public() {} // OK
-  public func Protected() {} // OK
-  public func Private() {} // OK
+  public func Protected() {} // Error
+  public func Private() {} // Error
 }
 
 class ChildWithImplicit extends Parent {

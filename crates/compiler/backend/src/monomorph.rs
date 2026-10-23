@@ -737,7 +737,7 @@ impl<'ctx> Monomorphizer<'ctx> {
             .span()
             .filter(|_| !flags.is_native())
             .map(|span| self.source_ref(span, bundle));
-        let def = PoolFunction::new(cname, Visibility::Public, flags)
+        let def = PoolFunction::new(cname, pool_visibility(method.flags().visibility()), flags)
             .with_class(Some(parent))
             .with_return_type(return_t)
             .with_source(source);
@@ -793,8 +793,14 @@ impl<'ctx> Monomorphizer<'ctx> {
             .iter()
             .map(|(k, v)| Property::new(k.clone(), v.clone()))
             .collect::<Vec<_>>();
-        let def =
-            PoolField::new(cname, class, Visibility::Public, typ, flags).with_attributes(attrs);
+        let def = PoolField::new(
+            cname,
+            class,
+            pool_visibility(field.flags().visibility()),
+            typ,
+            flags,
+        )
+        .with_attributes(attrs);
         bundle.define(def)
     }
 
@@ -818,6 +824,14 @@ impl<'ctx> Monomorphizer<'ctx> {
 
     fn has_backlog(&self) -> bool {
         self.classes.has_backlog() || self.methods.has_backlog() || self.functions.has_backlog()
+    }
+}
+
+fn pool_visibility(visibility: redscript_compiler_frontend::Visibility) -> Visibility {
+    match visibility {
+        redscript_compiler_frontend::Visibility::Public => Visibility::Public,
+        redscript_compiler_frontend::Visibility::Protected => Visibility::Protected,
+        redscript_compiler_frontend::Visibility::Private => Visibility::Private,
     }
 }
 

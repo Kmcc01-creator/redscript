@@ -63,6 +63,25 @@ pub fn compile_file(
     diagnostics
 }
 
+/// Checks `source`, as `test.reds`, against `bundle` and returns every diagnostic, errors
+/// included. Nothing is written to the bundle.
+pub fn check(
+    source: &str,
+    bundle: &ScriptBundle<'static>,
+    interner: &'static TypeInterner,
+) -> Vec<Diagnostic<'static>> {
+    let sources: &'static SourceMap = Box::leak(Box::new(SourceMap::new()));
+    sources.push_back("test.reds", source);
+    sources.populate_boot_lib();
+
+    let (symbols, _) = CompilationInputs::load(bundle, interner, &TypeFlagRegistry::default())
+        .unwrap()
+        .into_inner();
+    let mut reporter = CompileErrorReporter::default();
+    infer_from_sources(sources, symbols, &mut reporter, interner);
+    reporter.into_reported()
+}
+
 /// The full names of a class's functions, sorted.
 pub fn function_names(bundle: &ScriptBundle<'_>, class: &str) -> Vec<String> {
     let mut names = bundle

@@ -118,7 +118,7 @@ impl<'ctx> CompilationInputs<'ctx> {
                             .with_is_inline(field.flags().is_inline())
                             .with_is_const(field.flags().is_const())
                             .with_is_persistent(field.flags().is_persistent())
-                            .with_visibility(Visibility::Public);
+                            .with_visibility(load_visibility(field.visibility()));
 
                         fields
                             .add(assert_borrowed(name), Field::new(flags, typ, [], [], None))
@@ -148,7 +148,7 @@ impl<'ctx> CompilationInputs<'ctx> {
                             .with_is_unimplemented(
                                 method.body().is_empty() && !method.flags().is_native(),
                             )
-                            .with_visibility(Visibility::Public);
+                            .with_visibility(load_visibility(method.visibility()));
                         let func_t = load_function_type(method, bundle, interner, type_flags)?;
                         let base = virtuals.get(&method.name()).copied();
 
@@ -479,6 +479,16 @@ fn load_param<'ctx>(
 }
 
 #[track_caller]
+// The game's own visibility, as its bundle declares it. Nothing enforces it at run time, but
+// CDPR's scripts keep to it, and our compiles check against it.
+fn load_visibility(visibility: redscript_io::Visibility) -> Visibility {
+    match visibility {
+        redscript_io::Visibility::Public => Visibility::Public,
+        redscript_io::Visibility::Protected => Visibility::Protected,
+        redscript_io::Visibility::Private => Visibility::Private,
+    }
+}
+
 fn assert_borrowed<'a>(cow: &Cow<'a, str>) -> &'a str {
     match cow {
         Cow::Borrowed(s) => s,

@@ -1,9 +1,8 @@
 use std::fmt;
 
-use redscript_ast as ast;
 use redscript_ast::Span;
-use redscript_parser as parser;
 use thiserror::Error;
+use {redscript_ast as ast, redscript_parser as parser};
 
 use crate::lower::{LowerResult, Poly, TypeError};
 use crate::stages::FunctionAnnotation;
@@ -107,8 +106,8 @@ pub enum Diagnostic<'ctx> {
     ReplaceMethodConflict(Span),
     #[error("structures cannot have variance annotations")]
     InvalidStructVariance(Span),
-    #[error("method overrides cannot be less visibile than the method they override ({0})")]
-    LessVisibleOverride(Visibility, Span),
+    #[error("method overrides cannot be more visible than the method they override ({0})")]
+    MoreVisibleOverride(Visibility, Span),
     #[error("{0}")]
     Other(Box<dyn std::error::Error + 'ctx>, DiagnosticLevel, Span),
 }
@@ -125,7 +124,7 @@ impl<'ctx> Diagnostic<'ctx> {
             | Self::UnusedLocal(_)
             | Self::AddFieldConflict(_)
             | Self::ReplaceMethodConflict(_) => DiagnosticLevel::Warning,
-            Self::ImportIsPrivate(_, _) | Self::LessVisibleOverride(_, _) => {
+            Self::ImportIsPrivate(_, _) | Self::MoreVisibleOverride(_, _) => {
                 DiagnosticLevel::ErrorAllowedAtRuntime
             }
             Self::Other(_, level, _) => *level,
@@ -186,7 +185,7 @@ impl<'ctx> Diagnostic<'ctx> {
             | Self::AddFieldConflict(span)
             | Self::ReplaceMethodConflict(span)
             | Self::InvalidStructVariance(span)
-            | Self::LessVisibleOverride(_, span)
+            | Self::MoreVisibleOverride(_, span)
             | Self::Other(_, _, span) => *span,
         }
     }
@@ -237,7 +236,7 @@ impl<'ctx> Diagnostic<'ctx> {
             Self::AddFieldConflict(_) => "ADD_FIELD_CONFLICT",
             Self::ReplaceMethodConflict(_) => "REPLACE_METHOD_CONFLICT",
             Self::InvalidStructVariance(_) => "INVALID_STRUCT_VARIANCE",
-            Self::LessVisibleOverride(_, _) => "LESS_VISIBLE_OVERRIDE",
+            Self::MoreVisibleOverride(_, _) => "MORE_VISIBLE_OVERRIDE",
             Self::Other(_, _, _) => "OTHER",
         }
     }
