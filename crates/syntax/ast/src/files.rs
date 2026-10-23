@@ -151,7 +151,9 @@ impl File {
     }
 
     pub fn line_and_offset(&self, offset: u32) -> (usize, u32) {
-        if self.lines.first().is_some_and(|&p| p > offset) {
+        // `lines` holds where each line after the first starts, so a file with no newline has
+        // none, and every offset is on the first line (fork defect 19: this indexed `lines[-1]`).
+        if self.lines.first().is_none_or(|&p| p > offset) {
             (0, 0)
         } else {
             let line = self
@@ -219,6 +221,31 @@ impl<A> Default for StableDeque<A> {
             front: FrozenVec::default(),
             back: FrozenVec::default(),
         }
+    }
+}
+
+#[cfg(test)]
+mod lines {
+    use super::*;
+
+    fn at(file: &File, offset: u32) -> (usize, usize) {
+        let loc = file.lookup(offset);
+        (loc.line, loc.col)
+    }
+
+    #[test]
+    fn a_file_with_no_newline_is_one_line() {
+        let file = File::new("a.reds", "func F() -> Int32 { return 1 +; }");
+        assert_eq!(at(&file, 30), (0, 30));
+        assert_eq!(file.line_contents(0), Some(file.source()));
+    }
+
+    #[test]
+    fn offsets_on_each_side_of_a_newline() {
+        let file = File::new("a.reds", "ab\ncd");
+        assert_eq!(at(&file, 1), (0, 1));
+        assert_eq!(at(&file, 3), (1, 0));
+        assert_eq!(at(&file, 4), (1, 1));
     }
 }
 
