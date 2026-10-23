@@ -767,7 +767,8 @@ impl<'ctx> Monomorphizer<'ctx> {
         let typ = self.type_(&resolved, symbols, bundle);
         let flags = PoolParameterFlags::default()
             .with_is_optional(param.flags().is_optional())
-            .with_is_out(param.flags().is_out());
+            .with_is_out(param.flags().is_out())
+            .with_is_const(param.flags().is_const());
         bundle.define(PoolParameter::new(name, function, typ, flags))
     }
 
