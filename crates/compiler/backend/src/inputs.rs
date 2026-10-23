@@ -478,7 +478,6 @@ fn load_param<'ctx>(
     Ok(Param::new(assert_borrowed(name), flags, typ, None))
 }
 
-#[track_caller]
 // The game's own visibility, as its bundle declares it. Nothing enforces it at run time, but
 // CDPR's scripts keep to it, and our compiles check against it.
 fn load_visibility(visibility: redscript_io::Visibility) -> Visibility {
@@ -489,6 +488,7 @@ fn load_visibility(visibility: redscript_io::Visibility) -> Visibility {
     }
 }
 
+#[track_caller]
 fn assert_borrowed<'a>(cow: &Cow<'a, str>) -> &'a str {
     match cow {
         Cow::Borrowed(s) => s,
