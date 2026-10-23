@@ -817,7 +817,7 @@ impl<'scope, 'ctx> Assembler<'scope, 'ctx> {
                         let loc: i64 = self.labels[usize::from(label)].into();
                         Some(Offset::from(i16::try_from(loc - virtual_offset).ok()?))
                     })
-                    .ok_or(AssembleError::LabelTooDistant)?;
+                    .ok_or(AssembleError::LabelTooDistant(None))?;
                 virtual_offset += i64::from(instr.virtual_size());
                 Ok(instr)
             })
@@ -938,8 +938,8 @@ impl<'scope, 'ctx> Assembler<'scope, 'ctx> {
 
 #[derive(Debug, Error)]
 pub enum AssembleError<'ctx> {
-    #[error("label too distant")]
-    LabelTooDistant,
+    #[error("a jump in this function spans too much code; split the function")]
+    LabelTooDistant(Option<Span>),
     #[error("invalid control flow")]
     InvalidControlFlow(Span),
     #[error("too many arguments")]
@@ -962,7 +962,17 @@ impl AssembleError<'_> {
             | Self::InvalidIntrinsic(_, span)
             | Self::InvalidFunctionClass(span)
             | Self::Coalesce(_, span) => Some(*span),
-            _ => None,
+            Self::LabelTooDistant(span) => *span,
+            Self::Decoding(_) => None,
+        }
+    }
+
+    /// Places an error raised while assembling a function's code, which knows no span of its
+    /// own, at the function.
+    pub(crate) fn in_function(self, span: Span) -> Self {
+        match self {
+            Self::LabelTooDistant(None) => Self::LabelTooDistant(Some(span)),
+            other => other,
         }
     }
 }

@@ -384,7 +384,8 @@ impl<'ctx> Monomorphizer<'ctx> {
             .type_env(env)
             .bundle(bundle)
             .monomorphizer(self)
-            .build()?;
+            .build()
+            .map_err(|err| err.in_function(func.span))?;
 
         bundle[index].set_code(code);
         Ok(())
