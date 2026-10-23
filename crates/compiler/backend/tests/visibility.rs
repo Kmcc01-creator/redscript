@@ -32,7 +32,7 @@ fn codes(source: &str) -> Vec<&'static str> {
     let game = common::game_bundle(GAME, interner);
     let mut codes = common::check(source, &game, interner)
         .iter()
-        .map(|d| d.code())
+        .map(redscript_compiler_api::Diagnostic::code)
         .collect::<Vec<_>>();
     codes.sort();
     codes
@@ -63,7 +63,11 @@ func Outside(s: ref<System>) -> Int32 {
     );
     assert_eq!(
         codes,
-        ["INACCESSIBLE_FIELD", "INACCESSIBLE_METHOD", "INACCESSIBLE_METHOD"]
+        [
+            "INACCESSIBLE_FIELD",
+            "INACCESSIBLE_METHOD",
+            "INACCESSIBLE_METHOD"
+        ]
     );
 }
 
