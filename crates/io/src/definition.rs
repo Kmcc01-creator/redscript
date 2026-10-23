@@ -43,6 +43,33 @@ impl DefinitionHeader {
     }
 }
 
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, TryRead, TryWrite, Measure)]
+/// A definition's entry in the table that game 2.5's bundles add. The game reads two bits of the
+/// first byte: bit 0 to look the definition up before creating it, and bit 1 for a member of a
+/// class or an enum. The rest of each entry in CDPR's bundles is unwritten memory, kept as read.
+pub(crate) struct DefinitionFlags {
+    entry: [u8; 12],
+}
+
+impl DefinitionFlags {
+    const MEMBER: u8 = 1 << 1;
+    pub(crate) const SIZE: u32 = 12;
+
+    /// The entry for a definition the bundle was read without, as CDPR's compiler sets it.
+    pub(crate) fn for_definition(def: &Definition<'_>) -> Self {
+        let is_member = match def {
+            Definition::Function(f) => f.class.is_some(),
+            Definition::Field(_) | Definition::EnumMember(_) => true,
+            _ => false,
+        };
+        let mut entry = [0; 12];
+        if is_member {
+            entry[0] = Self::MEMBER;
+        }
+        DefinitionFlags { entry }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 /// Represents a definition in the pool.
 pub enum Definition<'i> {

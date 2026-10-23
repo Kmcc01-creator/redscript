@@ -8,8 +8,8 @@ use indexmap::map::RawEntryApiV1;
 use indexmap::{IndexMap, IndexSet};
 
 use crate::definition::{
-    Class, Definition, DefinitionHeader, DefinitionIndex, Enum, EnumMember, Field, Function,
-    IndexType, IndexedDefinition, Local, Parameter, SourceFile, Type,
+    Class, Definition, DefinitionFlags, DefinitionHeader, DefinitionIndex, Enum, EnumMember, Field,
+    Function, IndexType, IndexedDefinition, Local, Parameter, SourceFile, Type,
 };
 use crate::index::{
     self, CNameIndex, ClassIndex, EnumIndex, EnumValueIndex, FieldIndex, FunctionIndex, LocalIndex,
@@ -21,6 +21,7 @@ use crate::{ENDIANESS, Str, util};
 #[derive(Debug)]
 pub struct BundleReader<'i> {
     header: Header,
+    definition_flags: Option<TableHeader>,
     contents: &'i [u8],
 }
 
@@ -37,8 +38,14 @@ impl<'i> BundleReader<'i> {
                 err: "unsupported version",
             });
         };
+        let definition_flags = if header.flags & Header::DEFINITION_FLAGS != 0 {
+            Some(bytes.read_at(Header::SIZE as _, ENDIANESS)?)
+        } else {
+            None
+        };
         Ok(BundleReader {
             header,
+            definition_flags,
             contents: bytes,
         })
     }
@@ -62,6 +69,19 @@ impl<'i> BundleReader<'i> {
     pub fn definitions(&self) -> ItemReader<'_, 'i, Definition<'i>> {
         ItemReader::new(self, &self.header.definitions)
     }
+
+    fn definition_flags(&self) -> byte::Result<Option<Vec<DefinitionFlags>>> {
+        let Some(table) = self.definition_flags else {
+            return Ok(None);
+        };
+        (0..table.count)
+            .map(|index| {
+                let pos = table.offset + index * DefinitionFlags::SIZE;
+                self.contents.read_at(pos as _, ENDIANESS)
+            })
+            .collect::<Result<_, _>>()
+            .map(Some)
+    }
 }
 
 #[derive(Debug, TryRead, TryWrite, Measure)]
@@ -82,8 +102,11 @@ pub struct Header {
 }
 
 impl Header {
+    /// Set in game 2.5's bundles: the header ends with a seventh table, the definition flags.
+    const DEFINITION_FLAGS: u32 = 2;
     const MAGIC: [u8; 4] = *b"REDS";
     const SIZE: u32 = 104;
+    const SIZE_WITH_DEFINITION_FLAGS: u32 = Self::SIZE + 12;
     const SUPPORTED_VERSION: u32 = 14;
 }
 
@@ -111,6 +134,9 @@ pub struct ScriptBundle<'i> {
     resources: StringPool<'i, index::types::Resource>,
     strings: StringPool<'i, index::types::String>,
     definitions: Vec<Definition<'i>>,
+    /// The definition flags the bundle was read with, if any, by definition index. A bundle with
+    /// them is written with them, and the definitions added since get entries of their own.
+    definition_flags: Option<Vec<DefinitionFlags>>,
 }
 
 impl<'i> ScriptBundle<'i> {
@@ -128,6 +154,7 @@ impl<'i> ScriptBundle<'i> {
             definitions: iter::once(Ok(Definition::UNDEFINED))
                 .chain(reader.definitions().into_iter().skip(1))
                 .collect::<Result<_, _>>()?,
+            definition_flags: reader.definition_flags()?,
         })
     }
 
@@ -162,6 +189,7 @@ impl<'i> ScriptBundle<'i> {
                 .into_iter()
                 .map(Definition::into_owned)
                 .collect(),
+            definition_flags: self.definition_flags,
         }
     }
 
@@ -297,6 +325,7 @@ impl Default for ScriptBundle<'_> {
             resources: StringPool::new(),
             strings: StringPool::new(),
             definitions: vec![Definition::UNDEFINED],
+            definition_flags: None,
         }
     }
 }
@@ -523,7 +552,7 @@ impl<Ctx: Endianess> TryWrite<Ctx> for WriteableBundle<'_> {
     fn try_write(&self, bytes: &mut [u8], ctx: Ctx) -> byte::Result<usize> {
         let offset = &mut 0;
         // skip the header
-        *offset += Header::SIZE as usize;
+        *offset += self.header_size() as usize;
 
         let string_data_start = *offset;
         for str in self.string_data.dedup.keys() {
@@ -531,7 +560,7 @@ impl<Ctx: Endianess> TryWrite<Ctx> for WriteableBundle<'_> {
         }
 
         let string_data = TableHeader::new(
-            Header::SIZE as _,
+            string_data_start as _,
             self.string_data.byte_size as _,
             &bytes[string_data_start..*offset],
         );
@@ -558,6 +587,26 @@ impl<Ctx: Endianess> TryWrite<Ctx> for WriteableBundle<'_> {
             .strings
             .write(offset, bytes, &self.string_data, ctx)?;
 
+        // the definition flags go between the strings and the definitions, as in CDPR's bundles
+        let definition_flags = match &self.bundle.definition_flags {
+            Some(read) => {
+                let start = *offset;
+                for (index, def) in self.bundle.definitions.iter().enumerate() {
+                    let flags = read
+                        .get(index)
+                        .copied()
+                        .unwrap_or_else(|| DefinitionFlags::for_definition(def));
+                    bytes.write(offset, &flags, ctx)?;
+                }
+                Some(TableHeader::new(
+                    start as _,
+                    self.bundle.definitions.len() as _,
+                    &bytes[start..*offset],
+                ))
+            }
+            None => None,
+        };
+
         let mut headers_offset = headers_start;
         bytes.write(&mut headers_offset, &DefinitionHeader::default(), ctx)?;
         for def in self.bundle.definitions() {
@@ -578,7 +627,11 @@ impl<Ctx: Endianess> TryWrite<Ctx> for WriteableBundle<'_> {
         let header_for_hash = Header {
             magic: Header::MAGIC,
             version: Header::SUPPORTED_VERSION,
-            flags: 0,
+            flags: if definition_flags.is_some() {
+                Header::DEFINITION_FLAGS
+            } else {
+                0
+            },
             timestamp: Timestamp::new(),
             build: 0,
             crc: 0xDEAD_BEEF,
@@ -590,19 +643,42 @@ impl<Ctx: Endianess> TryWrite<Ctx> for WriteableBundle<'_> {
             definitions,
             strings,
         };
+        let mut bytes_for_hash = header_for_hash.to_bytes(ctx)?;
+        if let Some(table) = &definition_flags {
+            bytes_for_hash.extend(table.to_bytes(ctx)?);
+        }
         let header = Header {
-            crc: crc32fast::hash(&header_for_hash.to_bytes(ctx)?),
+            crc: crc32fast::hash(&bytes_for_hash),
             ..header_for_hash
         };
         bytes.write_at(0, &header, ctx)?;
+        if let Some(table) = &definition_flags {
+            bytes.write_at(Header::SIZE as _, table, ctx)?;
+        }
 
         Ok(*offset)
     }
 }
 
+impl WriteableBundle<'_> {
+    fn header_size(&self) -> u32 {
+        if self.bundle.definition_flags.is_some() {
+            Header::SIZE_WITH_DEFINITION_FLAGS
+        } else {
+            Header::SIZE
+        }
+    }
+}
+
 impl<Ctx: Copy> Measure<Ctx> for WriteableBundle<'_> {
     fn measure(&self, ctx: Ctx) -> usize {
-        Header::SIZE as usize
+        let definition_flags = if self.bundle.definition_flags.is_some() {
+            self.bundle.definitions.len() * DefinitionFlags::SIZE as usize
+        } else {
+            0
+        };
+        self.header_size() as usize
+            + definition_flags
             + self.string_data.byte_size
             + self.bundle.cnames.len() * mem::size_of::<u32>()
             + self.bundle.tdb_ids.len() * mem::size_of::<u32>()
