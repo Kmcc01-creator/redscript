@@ -5,7 +5,55 @@ input_file: crates/compiler/backend/tests/data/static-arrays.reds
 ---
 // Test; (f0)
 assign
+static_array.element 0
 local 0
+i32.const 0
+i32.zero
+assign
+static_array.element 0
+local 0
+i32.const 1
+i32.zero
+assign
+static_array.element 0
+local 0
+i32.const 2
+i32.zero
+assign
+static_array.element 0
+local 0
+i32.const 3
+i32.zero
+assign
+static_array.element 0
+local 0
+i32.const 4
+i32.zero
+assign
+static_array.element 0
+local 0
+i32.const 5
+i32.zero
+assign
+static_array.element 0
+local 0
+i32.const 6
+i32.zero
+assign
+static_array.element 0
+local 0
+i32.const 7
+i32.zero
+assign
+static_array.element 0
+local 0
+i32.const 8
+i32.zero
+assign
+static_array.element 0
+local 0
+i32.const 9
+i32.zero
 assign
 static_array.element 0
 local 0

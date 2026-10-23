@@ -286,10 +286,23 @@ impl<'scope, 'ctx> Assembler<'scope, 'ctx> {
                     let array_t = self.monomorph.type_(&typ, self.symbols, self.bundle);
                     self.emit(Instr::ArrayClear(array_t));
                     self.emit(Instr::Local(local));
-                } else {
+                } else if let (Some(size), [element_t]) = (typ.id().static_array_size(), typ.args())
+                {
+                    // Element by element, as 0.5.x does.
+                    if let Some(value) = self.default_value(element_t) {
+                        let array_t = self.monomorph.type_(&typ, self.symbols, self.bundle);
+                        for i in 0..size {
+                            self.emit(Instr::Assign);
+                            self.emit(Instr::StaticArrayElement(array_t));
+                            self.emit(Instr::Local(local));
+                            self.emit(Instr::I32Const(i.into()));
+                            value.iter().cloned().for_each(|instr| self.emit(instr));
+                        }
+                    }
+                } else if let Some(value) = self.default_value(&typ) {
                     self.emit(Instr::Assign);
                     self.emit(Instr::Local(local));
-                    self.emit_default_instr(typ)?;
+                    value.into_iter().for_each(|instr| self.emit(instr));
                 }
             }
             ir::Stmt::Break(span) => match block_span {
@@ -840,22 +853,26 @@ impl<'scope, 'ctx> Assembler<'scope, 'ctx> {
         None
     }
 
-    fn emit_default_instr(&mut self, typ: MonoType<'ctx>) -> Result<(), AssembleError<'ctx>> {
+    /// The instructions for a type's default value, or `None` for a type with no constant for
+    /// one (`Variant`, `script_ref`, a static array, a primitive the game's bundle adds). A local
+    /// of such a type is left as the game constructed it, as 0.5.x does: an `Assign` with no value
+    /// after it made the VM read the next instruction as one (fork defect 18).
+    fn default_value(&mut self, typ: &MonoType<'ctx>) -> Option<Vec<Instr<Label>>> {
         match self.symbols[typ.id()].schema() {
             TypeSchema::Aggregate(aggregate) if aggregate.flags().is_struct() => {
-                let class = self.monomorph.class(&typ, self.symbols, self.bundle);
-                self.emit(Instr::Construct {
+                let class = self.monomorph.class(typ, self.symbols, self.bundle);
+                Some(vec![Instr::Construct {
                     arg_count: 0,
                     class,
-                });
+                }])
             }
-            TypeSchema::Aggregate(_) => {
-                self.emit(Instr::Null);
-            }
+            TypeSchema::Aggregate(_) => Some(vec![Instr::Null]),
             TypeSchema::Enum(_) => {
-                let enum_type = self.monomorph.type_(&typ, self.symbols, self.bundle);
-                self.emit(Instr::I32ToEnum { enum_type, size: 1 });
-                self.emit(Instr::I8Const(0));
+                let enum_type = self.monomorph.type_(typ, self.symbols, self.bundle);
+                Some(vec![
+                    Instr::I32ToEnum { enum_type, size: 1 },
+                    Instr::I8Const(0),
+                ])
             }
             TypeSchema::Primitive => {
                 let instr = match typ.id() {
@@ -890,12 +907,9 @@ impl<'scope, 'ctx> Assembler<'scope, 'ctx> {
                     id if id == predef::WREF => Some(Instr::WeakRefNull),
                     _ => None,
                 };
-                if let Some(instr) = instr {
-                    self.emit(instr);
-                }
+                instr.map(|instr| vec![instr])
             }
-        };
-        Ok(())
+        }
     }
 
     fn resolve_local(&self, loc: ir::Local) -> Option<PoolLocalIndex> {
