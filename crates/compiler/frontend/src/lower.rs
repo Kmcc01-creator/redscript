@@ -1899,7 +1899,14 @@ impl<'scope, 'ctx> Lower<'scope, 'ctx> {
                 PolyType::from_type_with_env(primary.func().type_().return_type(), &type_env)
                     .map_err(|var| Error::UnresolvedVar(var, span))?;
             if let Some(hint) = type_hint {
-                return_t.constrain_base(hint, self.symbols).ok();
+                // A script_ref parameter takes a value by AsRef at the use, so the type to infer
+                // from is the referenced one. Bound to script_ref<T>, a type variable made the
+                // function return a reference, which in game read as empty (fork defect 14).
+                let hint = match hint.strip_ref(self.symbols) {
+                    Some((RefType::Script, inner)) => inner,
+                    _ => hint.clone(),
+                };
+                return_t.constrain_base(&hint, self.symbols).ok();
             }
 
             let mut checked_args = Vec::with_capacity(args.len());
