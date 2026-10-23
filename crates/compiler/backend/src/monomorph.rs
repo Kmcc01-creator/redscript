@@ -1031,7 +1031,11 @@ impl<K> fmt::Display for MangledFreeFunction<'_, '_, K> {
         {
             return Ok(());
         };
-        write!(f, ";{}", MangledParams::new(self.func, self.env))?;
+        write!(
+            f,
+            ";{}",
+            MangledParams::new(self.func, self.func.flags().is_operator(), self.env)
+        )?;
         if self.func.flags().is_cast() {
             let rt = self
                 .func
@@ -1081,31 +1085,64 @@ impl<K> fmt::Display for MangledMethod<'_, '_, K> {
         {
             return Ok(());
         };
-        write!(f, ";{}", MangledParams::new(self.method, self.env))
+        write!(f, ";{}", MangledParams::new(self.method, false, self.env))
     }
 }
 
+/// A function's parameters as the game's own names spell them, which 0.5.x follows: `Out` only
+/// for an operator, and each type through [`MangledParamType`]. Spelled otherwise, an override of
+/// a game method with a `script_ref` or `out` parameter was named apart from the method, and
+/// overloads on `T` and `script_ref<T>` shared a name (fork defect 22).
 #[derive(Debug)]
 struct MangledParams<'a, 'ctx, F> {
     func: F,
+    is_operator: bool,
     env: &'a ScopedMap<'a, &'ctx str, MonoType<'ctx>>,
 }
 
 impl<'a, 'ctx, F> MangledParams<'a, 'ctx, F> {
-    fn new(func: F, env: &'a ScopedMap<'a, &'ctx str, MonoType<'ctx>>) -> Self {
-        Self { func, env }
+    fn new(func: F, is_operator: bool, env: &'a ScopedMap<'a, &'ctx str, MonoType<'ctx>>) -> Self {
+        Self {
+            func,
+            is_operator,
+            env,
+        }
     }
 }
 
 impl<'ctx, F: FunctionKind<'ctx>> fmt::Display for MangledParams<'_, 'ctx, F> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.func.type_().params().iter().try_for_each(|param| {
-            if param.flags().is_out() {
+            if self.is_operator && param.flags().is_out() {
                 write!(f, "Out")?;
             }
-            let typ = param.type_().unwrap_ref_or_self().assume_mono(self.env);
-            write!(f, "{typ}",)
+            let typ = param.type_().assume_mono(self.env);
+            write!(f, "{}", MangledParamType(&typ))
         })
+    }
+}
+
+/// A parameter type in a function's name: `ref` and `wref` are left out at every level and
+/// `script_ref` is kept, so `script_ref<wref<A>>` is `script_ref<A>`.
+#[derive(Debug)]
+struct MangledParamType<'a, 'ctx>(&'a MonoType<'ctx>);
+
+impl fmt::Display for MangledParamType<'_, '_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match (self.0.id(), self.0.args()) {
+            (id, [arg]) if id == predef::REF || id == predef::WREF => MangledParamType(arg).fmt(f),
+            (id, []) => write!(f, "{id}"),
+            (id, args) => {
+                write!(f, "{id}<")?;
+                for (i, arg) in args.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ",")?;
+                    }
+                    MangledParamType(arg).fmt(f)?;
+                }
+                write!(f, ">")
+            }
+        }
     }
 }
 

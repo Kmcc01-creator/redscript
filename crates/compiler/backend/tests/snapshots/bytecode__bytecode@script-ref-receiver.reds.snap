@@ -9,27 +9,27 @@ ctx 10
 this
 object.field 0
 
-// StructRead;Vec (f1)
+// StructRead;script_ref<Vec> (f1)
 return
 struct.field 1
 deref 0
 param 0
 
-// StructWrite;VecFloat (f2)
+// StructWrite;script_ref<Vec>Float (f2)
 assign
 struct.field 1
 deref 0
 param 1
 param 2
 
-// ClassRead;Node (f3)
+// ClassRead;script_ref<Node> (f3)
 return
 ctx 27
 deref 1
 param 3
 object.field 0
 
-// ClassCall;Node (f4)
+// ClassCall;script_ref<Node> (f4)
 return
 ctx 34
 deref 1

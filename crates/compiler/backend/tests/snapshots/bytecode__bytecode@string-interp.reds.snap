@@ -38,6 +38,6 @@ as_ref 0
 string.const 3
 param.end
 
-// OperatorAdd;StringString (f1)
+// OperatorAdd;script_ref<String>script_ref<String> (f1)
 
 // OperatorSubtract;Int32Int32 (f2)

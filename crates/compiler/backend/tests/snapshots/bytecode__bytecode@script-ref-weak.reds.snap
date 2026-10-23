@@ -3,12 +3,12 @@ source: crates/compiler/backend/tests/bytecode.rs
 expression: "BytecodePrinter::new(&bundle, bundle_len)"
 input_file: crates/compiler/backend/tests/data/script-ref-weak.reds
 ---
-// ReadWeak;wref<Node> (f0)
+// ReadWeak;script_ref<Node> (f0)
 return
 deref 0
 param 0
 
-// WriteWeak;wref<Node>Node (f1)
+// WriteWeak;script_ref<Node>Node (f1)
 assign
 param 1
 as_ref 0

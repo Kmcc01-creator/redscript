@@ -5,7 +5,7 @@ input_file: crates/compiler/backend/tests/data/static-receiver.reds
 ---
 // Dummy::TakesSelf;Dummy (f0)
 
-// Dummy::TakesScriptRef;Dummy (f1)
+// Dummy::TakesScriptRef;script_ref<Dummy> (f1)
 
 // Test; (f2)
 assign
