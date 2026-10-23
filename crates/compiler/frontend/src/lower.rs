@@ -326,6 +326,15 @@ impl<'scope, 'ctx> Lower<'scope, 'ctx> {
                 span,
             }),
             Projection::Scrutinee(local) => Ok(ir::Expr::Local(*local, span)),
+            Projection::Deref {
+                reference,
+                reference_type,
+            } => {
+                let reference = self.lower_projection(reference, env, span)?;
+                let (expr, _) =
+                    self.deref_script_receiver(reference, reference_type.clone(), env, span)?;
+                Ok(expr)
+            }
         }
     }
 
@@ -357,6 +366,10 @@ impl<'scope, 'ctx> Lower<'scope, 'ctx> {
             }
             ast::Pattern::As(pattern, (as_type, type_span)) => {
                 let (pattern, pattern_span) = &**pattern;
+                let deref = projection.deref_script_ref(projection_t, self.symbols);
+                let (projection, projection_t) = deref
+                    .as_ref()
+                    .map_or((projection, projection_t), |(p, t)| (p, t));
 
                 let unref_t = projection_t
                     .strip_ref(self.symbols)
@@ -395,6 +408,10 @@ impl<'scope, 'ctx> Lower<'scope, 'ctx> {
 
                 let aggregate_t_app = TypeApp::from_id(*type_id, self.symbols);
                 let aggregate_t = aggregate_t_app.clone().into_type().into_poly();
+                let deref = projection.deref_script_ref(projection_t, self.symbols);
+                let (projection, projection_t) = deref
+                    .as_ref()
+                    .map_or((projection, projection_t), |(p, t)| (p, t));
                 let (receiver_ref, unref_t) = projection_t.strip_ref(self.symbols).unzip();
                 let unref_t = unref_t.unwrap_or(projection_t.clone());
 
@@ -2594,6 +2611,30 @@ enum Projection<'scope, 'ctx> {
         index: i32,
     },
     Scrutinee(ir::Local),
+    Deref {
+        reference: &'scope Self,
+        reference_type: PolyType<'ctx>,
+    },
+}
+
+impl<'scope, 'ctx> Projection<'scope, 'ctx> {
+    /// This projection dereferenced, with the type of its target, when `typ` is a `script_ref`.
+    /// A cast or destructuring pattern works through it, so that it binds and reads the fields of
+    /// the reference's target rather than of the reference (fork defect 16).
+    fn deref_script_ref(
+        &'scope self,
+        typ: &PolyType<'ctx>,
+        symbols: &Symbols<'ctx>,
+    ) -> Option<(Self, PolyType<'ctx>)> {
+        let (RefType::Script, target) = typ.strip_ref(symbols)? else {
+            return None;
+        };
+        let deref = Self::Deref {
+            reference: self,
+            reference_type: typ.clone(),
+        };
+        Some((deref, target))
+    }
 }
 
 #[derive(Debug)]

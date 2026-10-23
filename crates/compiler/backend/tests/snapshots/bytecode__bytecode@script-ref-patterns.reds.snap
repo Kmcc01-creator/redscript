@@ -13,13 +13,54 @@ return
 ref.to_bool
 local 0
 
-// WeakCast;script_ref<Base> (f1)
+// CastPattern;script_ref<Base> (f1)
 assign
 local 1
+param 1
+jump.if_not 71
+ref.to_bool
+ref.dyncast 0
+deref 0
+local 1
+assign
+local 2
+deref 0
+local 1
+return
+ref.to_bool
+local 2
+jump 0
+return
+false.const
+
+// Destructure;script_ref<Base> (f2)
+assign
+local 3
+param 2
+jump.if_not 82
+ref.to_bool
+ref.dyncast 0
+deref 0
+local 3
+assign
+local 4
+ctx 27
+deref 0
+local 3
+object.field 0
+return
+local 4
+jump 0
+return
+i32.zero
+
+// WeakCast;script_ref<Base> (f3)
+assign
+local 5
 wref.dyncast 0
 deref 1
-param 1
+param 3
 return
 ref.to_bool
 wref.to_ref
-local 1
+local 5
