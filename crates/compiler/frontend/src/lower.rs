@@ -2,7 +2,7 @@ use std::cell::Cell;
 use std::fmt::Debug;
 use std::ops::RangeInclusive;
 use std::rc::Rc;
-use std::{iter, mem, slice};
+use std::{iter, mem};
 
 use bon::bon;
 use env::{Capture, Locals};
@@ -358,8 +358,9 @@ impl<'scope, 'ctx> Lower<'scope, 'ctx> {
             ast::Pattern::As(pattern, (as_type, type_span)) => {
                 let (pattern, pattern_span) = &**pattern;
 
-                let (ref_type, unref_t) = projection_t.strip_ref(self.symbols).unzip();
-                let unref_t = unref_t.unwrap_or(projection_t.clone());
+                let unref_t = projection_t
+                    .strip_ref(self.symbols)
+                    .map_or_else(|| projection_t.clone(), |(_, t)| t);
 
                 let as_type = self.resolve_type(as_type, env, *type_span)?;
                 as_type
@@ -375,7 +376,7 @@ impl<'scope, 'ctx> Lower<'scope, 'ctx> {
                 let type_check = self
                     .runtime_type_check_builder()
                     .expr(projected)
-                    .maybe_ref_type(ref_type)
+                    .expr_type(projection_t)
                     .target_type(&as_type)
                     .env(env)
                     .span(*pattern_span)
@@ -405,7 +406,7 @@ impl<'scope, 'ctx> Lower<'scope, 'ctx> {
                 let type_check = self
                     .runtime_type_check_builder()
                     .expr(projected)
-                    .maybe_ref_type(receiver_ref)
+                    .expr_type(projection_t)
                     .target_type(&aggregate_t)
                     .env(env)
                     .span(*span)
@@ -2280,11 +2281,15 @@ impl<'scope, 'ctx> Lower<'scope, 'ctx> {
         Ok((ir, field_t, field))
     }
 
+    /// The test a cast or destructuring pattern makes: `IsDefined(expr as T)`. A dynamic cast
+    /// names no class. `IsA(NameOf<T>())`, used before, passed the bundle's name, which for a
+    /// native class is its script name, while the engine's `IsA` knows only the native one, so
+    /// the pattern never matched a native class whose two names differ (fork defect 13).
     #[builder(finish_fn = build)]
     fn runtime_type_check_builder(
         &mut self,
         expr: ir::Expr<'ctx>,
-        ref_type: Option<RefType>,
+        expr_type: &PolyType<'ctx>,
         target_type: &PolyType<'ctx>,
         env: &mut Env<'_, 'ctx>,
         span: Span,
@@ -2298,31 +2303,29 @@ impl<'scope, 'ctx> Lower<'scope, 'ctx> {
             .constrain_base(&PolyType::nullary(predef::ISCRIPTABLE), self.symbols)
             .with_span(span)?;
 
-        let (name_of, name_t) = self
+        let (expr, expr_t) = self.deref_script_receiver(expr, expr_type.clone(), env, span)?;
+        let is_mixed_ref = self.symbols[upper_bound.id()]
+            .schema()
+            .as_aggregate()
+            .is_some_and(|agg| agg.flags().is_mixed_ref());
+        let cast_t = match expr_t.strip_ref(self.symbols) {
+            Some((RefType::Weak, _)) => Type::app(predef::WREF, [target_type.clone()]).into_poly(),
+            _ if is_mixed_ref => Type::app(predef::REF, [target_type.clone()]).into_poly(),
+            _ => target_type.clone(),
+        };
+        let cast = ir::Expr::DynCast {
+            expr: expr.into(),
+            expr_type: expr_t.into(),
+            target_type: upper_bound.into(),
+            span,
+        };
+        let (call, _) = self
             .free_function_call_builder()
-            .name(ir::Intrinsic::NameOf)
-            .args([])
-            .type_args(slice::from_ref(target_type))
+            .name(ir::Intrinsic::IsDefined)
+            .args([(cast, cast_t)])
             .env(env)
             .span(span)
             .build()?;
-        let candidates = self
-            .symbols
-            .query_methods_by_name(upper_bound.id(), "IsA")
-            .filter(|entry| !entry.func().flags().is_static());
-        let mut args = [ir::Expr::call(name_of, span)];
-        let (call, _) = self
-            .typed_overload_resolver()
-            .name("IsA")
-            .args(&mut args)
-            .arg_types(&[name_t])
-            .candidates(candidates)
-            .receiver(upper_bound.clone())
-            .env(env)
-            .span(span)
-            .resolve()?
-            .with_args(args)
-            .into_instance_call(expr, upper_bound, ref_type, ir::CallMode::Normal);
         Ok(call)
     }
 

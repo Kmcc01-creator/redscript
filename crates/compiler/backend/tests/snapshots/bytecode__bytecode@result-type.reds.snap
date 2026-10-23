@@ -31,12 +31,10 @@ local 0
 // Result<Int32,String>::Map<Int32>;Function1<Int32,Int32> (f4)
 switch 5
 true.const
-switch.label 108 29
-ctx 26
+switch.label 91 12
+ref.to_bool
+ref.dyncast 0
 this
-invoke.virtual j25 l13 f1 0000000000000000
-cname.const 2
-param.end
 assign
 local 1
 ctx 10
@@ -46,16 +44,14 @@ return
 invoke.static j53 l14 f2 0000000000000000
 ctx 9
 param 1
-invoke.virtual j25 l14 f3 0000000000000000
+invoke.virtual j25 l14 f1 0000000000000000
 local 1
 param.end
 param.end
-switch.label 80 29
-ctx 26
+switch.label 63 12
+ref.to_bool
+ref.dyncast 1
 this
-invoke.virtual j25 l15 f1 0000000000000000
-cname.const 4
-param.end
 assign
 local 2
 ctx 10
@@ -71,7 +67,7 @@ param.end
 // lambda$23::Instantiate (f3)
 assign
 local 3
-object.new 1
+object.new 2
 return
 local 3
 
@@ -87,7 +83,7 @@ param.end
 // Err<Int32,String>::New;String (f5)
 assign
 local 4
-object.new 2
+object.new 1
 assign
 ctx 18
 local 4
